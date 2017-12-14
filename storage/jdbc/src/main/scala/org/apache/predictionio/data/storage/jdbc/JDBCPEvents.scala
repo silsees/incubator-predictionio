@@ -20,15 +20,13 @@ package org.apache.predictionio.data.storage.jdbc
 import java.sql.{DriverManager, ResultSet}
 
 import com.github.nscala_time.time.Imports._
-import org.apache.predictionio.data.storage.{
-  DataMap, Event, PEvents, StorageClientConfig}
+import org.apache.predictionio.data.storage.{DataMap, Event, PEvents, StorageClientConfig}
 import org.apache.predictionio.data.SparkVersionDependent
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.{JdbcRDD, RDD}
 import org.apache.spark.sql.SaveMode
 import org.json4s.JObject
 import org.json4s.native.Serialization
-import scalikejdbc._
 
 /** JDBC implementation of [[PEvents]] */
 class JDBCPEvents(client: String, config: StorageClientConfig, namespace: String) extends PEvents {
@@ -169,18 +167,29 @@ class JDBCPEvents(client: String, config: StorageClientConfig, namespace: String
   }
 
   def delete(eventIds: RDD[String], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
-
     eventIds.foreachPartition{ iter =>
-
-      iter.foreach { eventId =>
-        DB localTx { implicit session =>
-        val tableName = JDBCUtils.eventTableName(namespace, appId, channelId)
-        val table = SQLSyntax.createUnsafely(tableName)
-        sql"""
+      val conn = DriverManager.getConnection(
+        client,
+        config.properties("USERNAME"),
+        config.properties("PASSWORD"))
+      using(DB(conn)) { db =>
+        db.begin()
+        try {
+          iter.foreach { eventId =>
+            db.withinTx  { implicit session =>
+              val tableName = JDBCUtils.eventTableName(namespace, appId, channelId)
+              val table = SQLSyntax.createUnsafely(tableName)
+              sql"""
         delete from $table where id = $eventId
         """.update().apply()
-        true
+              true
+            }
+          }
+        } catch { case e =>
+          db.rollbackIfActive()
+          throw e
         }
+        db.commit()
       }
     }
   }
