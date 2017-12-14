@@ -18,33 +18,6 @@
 
 package org.apache.predictionio.data.storage.hbase
 
-import org.apache.predictionio.data.storage.Event
-import org.apache.predictionio.data.storage.EventValidation
-import org.apache.predictionio.data.storage.DataMap
-
-import org.apache.hadoop.hbase.client.Result
-import org.apache.hadoop.hbase.client.Put
-import org.apache.hadoop.hbase.client.Scan
-import org.apache.hadoop.hbase.util.Bytes
-import org.apache.hadoop.hbase.filter.FilterList
-import org.apache.hadoop.hbase.filter.SingleColumnValueFilter
-import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp
-import org.apache.hadoop.hbase.filter.BinaryComparator
-import org.apache.hadoop.hbase.filter.QualifierFilter
-import org.apache.hadoop.hbase.filter.SkipFilter
-
-import org.json4s.DefaultFormats
-import org.json4s.JObject
-import org.json4s.native.Serialization.{ read, write }
-
-import org.joda.time.DateTime
-import org.joda.time.DateTimeZone
-
-import org.apache.commons.codec.binary.Base64
-import java.security.MessageDigest
-
-import java.util.UUID
-
 /* common utility function for accessing EventsStore in HBase */
 object HBEventsUtil {
 
@@ -145,7 +118,7 @@ object HBEventsUtil {
 
   def eventToPut(event: Event, appId: Int): (Put, RowKey) = {
     // generate new rowKey if eventId is None
-    val rowKey = event.eventId.map { id =>
+    val rowKey = event.eventId.filter{ id => Base64.decodeBase64(id)==32 }.map { id =>
       RowKey(id) // create rowKey from eventId
     }.getOrElse {
       // TOOD: use real UUID. not pseudo random
